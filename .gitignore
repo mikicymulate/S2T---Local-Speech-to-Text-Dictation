@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# S2T runtime files
+s2t.log
+history.jsonl
+
+# IDE / editor
+.idea/
+
+# Claude Code local settings
+.claude/settings.local.json

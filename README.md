@@ -1,0 +1,61 @@
+# S2T — Local Speech-to-Text Dictation
+
+A [Wispr Flow](https://wisprflow.ai/)-style dictation tool for Windows that runs **100% on local AI**. Hold a hotkey in any application, speak, release — clean, punctuated text is pasted at your cursor and left on the clipboard.
+
+Two-stage pipeline, all offline:
+
+1. **Speech → text**: [faster-whisper](https://github.com/SYSTRAN/faster-whisper) running locally on CPU (int8).
+2. **Text → clean text**: your **LM Studio** server (`google/gemma-4-e4b` by default) adds punctuation, removes filler words ("um", "uh", "you know") and applies your custom dictionary. If LM Studio is offline, the raw Whisper transcript is used instead — dictation never breaks.
+
+## Setup
+
+```
+pip install -r requirements.txt
+python main.py
+```
+
+- First run downloads the Whisper model (~460 MB for `small`) from Hugging Face; fully offline afterwards.
+- If LM Studio's server isn't running, the app starts it via `lms server start` and warms the model up (the model loads on the first request, so give it a moment after launch).
+- A gray tray icon appears when running. It turns **red** while recording and **orange** while transcribing.
+
+## Usage
+
+| Action | Default key |
+|---|---|
+| Hold-to-talk: record while held, insert on release | hold **Right Ctrl** |
+| Hands-free toggle: press to start, press again to stop & insert | **F8** |
+
+While recording, a small pill appears at the bottom of the screen. After release, the cleaned text is:
+
+- **pasted at the cursor** of whatever app has focus (simulated Ctrl+V), and
+- **left on the clipboard** so you can paste it again anywhere.
+
+Every dictation is logged to `history.jsonl` (timestamp, raw transcript, cleaned text).
+
+## Configuration — `config.json`
+
+Created with defaults on first run. Edit it (tray → *Open config*), then tray → *Reload config*.
+
+| Key | Default | Notes |
+|---|---|---|
+| `mic_device` | `null` | Input device index or name substring; `null` = system default |
+| `whisper.model` | `"small"` | `tiny`/`base`/`small`/`medium`/`large-v3`/`distil-large-v3`/`large-v3-turbo`. Bigger = more accurate, slower on CPU |
+| `whisper.language` | `null` | `null` auto-detects; set e.g. `"en"` to lock and speed up |
+| `hotkeys.hold` / `hotkeys.toggle` | `"right ctrl"` / `"f8"` | Any [keyboard](https://github.com/boppreh/keyboard) key name, e.g. `"ctrl+alt+space"` for toggle |
+| `insert_mode` | `"paste"` | `paste` (Ctrl+V, most reliable) · `type` (simulated keystrokes, for apps that block paste) · `clipboard_only` |
+| `restore_clipboard` | `false` | `true` puts your previous clipboard content back after pasting |
+| `lmstudio.enabled` | `true` | `false` = raw Whisper output only |
+| `lmstudio.model` | `"google/gemma-4-e4b"` | Any model available in LM Studio (`lms ls`); the app loads it at startup if needed |
+| `lmstudio.gpu_offload` | `"off"` | Passed to `lms load --gpu`: `"off"`, `"max"`, or `0`–`1`. Keep `"off"` if the model is bigger than your VRAM — partial offload can make generation 30× slower |
+| `dictionary` | `{}` | Vocabulary fixes, e.g. `{"whisper flow": "Wispr Flow", "gemma": "Gemma"}` |
+| `sound_cues` | `true` | Beep on record start/stop |
+| `max_record_seconds` | `300` | Hard cap per dictation |
+
+## Troubleshooting
+
+- **Nothing happens on the hotkey** — another app may grab the key; change `hotkeys.hold` in config. Some elevated (admin) windows ignore keystrokes from non-elevated apps: run `python main.py` from an admin terminal to dictate into admin windows.
+- **No text inserted but clipboard has it** — the target app may block simulated Ctrl+V; set `insert_mode` to `"type"`.
+- **Slow transcription** — use a smaller `whisper.model` (`base`), or set `whisper.language` to your language to skip detection.
+- **"LM Studio cleanup failed" in the log** — check `lms server status` and that the model in `lmstudio.model` exists (`lms ls`). Dictation still works with raw transcripts meanwhile.
+- **Wrong microphone** — set `mic_device` to a name substring from the log/`python -c "import sounddevice; print(sounddevice.query_devices())"`.
+- **Logs** — `s2t.log` next to `main.py`.

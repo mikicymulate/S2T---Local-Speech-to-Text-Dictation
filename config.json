@@ -1,0 +1,25 @@
+{
+  "mic_device": null,
+  "whisper": {
+    "model": "small",
+    "device": "cpu",
+    "compute_type": "int8",
+    "language": null
+  },
+  "hotkeys": {
+    "hold": "right ctrl",
+    "toggle": "f8"
+  },
+  "insert_mode": "paste",
+  "restore_clipboard": false,
+  "lmstudio": {
+    "enabled": true,
+    "base_url": "http://localhost:1234/v1",
+    "model": "google/gemma-4-e4b",
+    "timeout_seconds": 15,
+    "auto_start_server": true
+  },
+  "dictionary": {},
+  "sound_cues": true,
+  "max_record_seconds": 300
+}
