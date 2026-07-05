@@ -7,6 +7,8 @@ Two-stage pipeline, all offline:
 1. **Speech → text**: [faster-whisper](https://github.com/SYSTRAN/faster-whisper) running locally on CPU (int8).
 2. **Text → clean text**: your **LM Studio** server (`google/gemma-4-e4b` by default) adds punctuation, removes filler words ("um", "uh", "you know") and applies your custom dictionary. If LM Studio is offline, the raw Whisper transcript is used instead — dictation never breaks.
 
+> **New here / just want to run it?** See **[GETTING_STARTED.md](GETTING_STARTED.md)** — a plain-language, step-by-step runbook. This README is the shorter technical overview.
+
 ## Setup
 
 ```
