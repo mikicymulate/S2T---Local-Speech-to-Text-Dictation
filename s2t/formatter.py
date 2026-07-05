@@ -8,19 +8,20 @@ import json
 import logging
 import subprocess
 import threading
+import time
 
 import requests
 
 log = logging.getLogger(__name__)
 
-INSTRUCTIONS = """You clean up dictated speech transcripts. Rules:
-- Add proper punctuation, capitalization and, for long dictations, paragraph breaks.
-- Remove filler words (um, uh, you know, like) and false starts, keeping the speaker's intended final phrasing.
-- Never add information, never answer questions contained in the text, never change the meaning.
-- Output ONLY the cleaned text. No commentary, no quotes around it.{dictionary}
-
-Transcript:
-{raw}"""
+# /no_think suppresses hybrid-reasoning models' thinking phase (Gemma 4, Qwen3):
+# without it, cleanup takes minutes of hidden chain-of-thought instead of seconds.
+# Keep this prompt a compact single paragraph — a structured multi-line rules list
+# makes Gemma 4 think anyway, /no_think notwithstanding (verified empirically)
+INSTRUCTIONS = ("/no_think Clean up this dictated text: fix punctuation and capitalization, "
+                "remove filler words (um, uh, you know, like) and false starts, never add "
+                "anything or change the meaning{dictionary}. "
+                "Reply with only the cleaned text.\n\nDictated text: {raw}")
 
 
 class Formatter:
@@ -47,19 +48,37 @@ class Formatter:
         dictionary = ""
         if self._dictionary:
             rules = "; ".join(f'"{heard}" means "{meant}"' for heard, meant in self._dictionary.items())
-            dictionary = f"\n- Apply these vocabulary corrections: {rules}."
+            dictionary = f", and apply these vocabulary corrections: {rules}"
         return INSTRUCTIONS.format(dictionary=dictionary, raw=raw)
 
     def clean(self, raw: str) -> str:
         if not self._cfg["enabled"] or not raw.strip():
             return raw
         try:
-            response = self._get_client().chat.completions.create(
+            # cap output relative to input and stream: an uncapped, non-streaming request
+            # that the client abandons keeps generating server-side until the context
+            # limit and starves the queue for every later request
+            max_tokens = 2 * len(raw.split()) + 100
+            stream = self._get_client().chat.completions.create(
                 model=self._cfg["model"],
                 messages=[{"role": "user", "content": self._prompt(raw)}],
                 temperature=0,
+                max_tokens=max_tokens,
+                stream=True,
             )
-            text = (response.choices[0].message.content or "").strip()
+            # wall-clock budget: closing a *streaming* response cancels generation
+            # server-side, so falling back to the raw transcript is safe and cheap
+            deadline = time.monotonic() + self._cfg["timeout_seconds"]
+            parts = []
+            for chunk in stream:
+                if time.monotonic() > deadline:
+                    stream.close()
+                    log.warning("LM Studio cleanup exceeded %ss budget; using raw transcript",
+                                self._cfg["timeout_seconds"])
+                    return raw
+                if chunk.choices and chunk.choices[0].delta.content:
+                    parts.append(chunk.choices[0].delta.content)
+            text = "".join(parts).strip()
             # models occasionally wrap the result in quotes despite instructions
             if len(text) > 1 and text[0] == text[-1] and text[0] in "\"'“":
                 text = text[1:-1].strip()

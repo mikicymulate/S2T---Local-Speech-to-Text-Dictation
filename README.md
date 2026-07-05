@@ -57,5 +57,6 @@ Created with defaults on first run. Edit it (tray → *Open config*), then tray 
 - **No text inserted but clipboard has it** — the target app may block simulated Ctrl+V; set `insert_mode` to `"type"`.
 - **Slow transcription** — use a smaller `whisper.model` (`base`), or set `whisper.language` to your language to skip detection.
 - **"LM Studio cleanup failed" in the log** — check `lms server status` and that the model in `lmstudio.model` exists (`lms ls`). Dictation still works with raw transcripts meanwhile.
+- **Cleanup times out / raw text inserted** — hybrid reasoning models (Gemma 4, Qwen3) may "think" for minutes before answering. The built-in prompt sends `/no_think` to suppress this; if you switch to a different model and see timeouts, make sure it either isn't a reasoning model or honors `/no_think`.
 - **Wrong microphone** — set `mic_device` to a name substring from the log/`python -c "import sounddevice; print(sounddevice.query_devices())"`.
 - **Logs** — `s2t.log` next to `main.py`.

@@ -10,7 +10,7 @@ import time
 import winsound
 from datetime import datetime
 
-from . import injector
+from . import injector, winperf
 from .audio import Recorder, SAMPLE_RATE
 from .config import HISTORY_PATH, load_config
 from .formatter import Formatter
@@ -57,6 +57,7 @@ class App:
         except Exception:
             log.exception("Failed to load Whisper model")
         self._formatter.ensure_server()
+        winperf.unthrottle_lmstudio()
 
     # --- hotkey callbacks (must return fast) -------------------------------
 

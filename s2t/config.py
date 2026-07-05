@@ -36,7 +36,9 @@ DEFAULTS = {
     "restore_clipboard": False,
     "lmstudio": {
         "enabled": True,
-        "base_url": "http://localhost:1234/v1",
+        # 127.0.0.1, NOT localhost: LM Studio listens on IPv4 only and localhost
+        # resolves to ::1 first, which can black-hole for minutes on some machines
+        "base_url": "http://127.0.0.1:1234/v1",
         "model": "google/gemma-4-e4b",
         # `lms load --gpu` value: "off", "max", or 0..1. "off" avoids thrashing when
         # the model doesn't fit in VRAM (models larger than ~4 GB on this machine)
