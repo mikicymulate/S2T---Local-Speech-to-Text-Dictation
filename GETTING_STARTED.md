@@ -151,11 +151,11 @@ The file lives at `C:\dev\AI\S2T\config.json`. Here's what each setting does:
 | `lmstudio.gpu_offload` | `"off"` | Leave `"off"` on this laptop — the GPU is too small for this model and turning it on makes things much slower. |
 
 ### Custom dictionary example
-If it keeps writing "Wisper flow" when you say "Wispr Flow", or your name wrong, teach it:
+If it keeps writing "speech to text" when you say "Speech-to-Text", or your name wrong, teach it:
 
 ```json
 "dictionary": {
-  "wisper flow": "Wispr Flow",
+  "speech to text": "Speech-to-Text",
   "michael matricks": "Michael Matrix"
 }
 ```

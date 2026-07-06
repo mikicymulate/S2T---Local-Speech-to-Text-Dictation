@@ -1,6 +1,6 @@
 # S2T — Local Speech-to-Text Dictation
 
-A [Wispr Flow](https://wisprflow.ai/)-style dictation tool for Windows that runs **100% on local AI**. Hold a hotkey in any application, speak, release — clean, punctuated text is pasted at your cursor and left on the clipboard.
+A **Speech-to-Text** dictation tool for Windows that runs **100% on local AI**. Hold a hotkey in any application, speak, release — clean, punctuated text is pasted at your cursor and left on the clipboard.
 
 Two-stage pipeline, all offline:
 
@@ -64,7 +64,7 @@ Microphone and model can also be set from the **Settings window** above.
 | `lmstudio.enabled` | `true` | `false` = raw Whisper output only |
 | `lmstudio.model` | `"google/gemma-4-e4b"` | Any model available in LM Studio (`lms ls`); the app loads it at startup if needed |
 | `lmstudio.gpu_offload` | `"off"` | Passed to `lms load --gpu`: `"off"`, `"max"`, or `0`–`1`. Keep `"off"` if the model is bigger than your VRAM — partial offload can make generation 30× slower |
-| `dictionary` | `{}` | Vocabulary fixes, e.g. `{"whisper flow": "Wispr Flow", "gemma": "Gemma"}` |
+| `dictionary` | `{}` | Vocabulary fixes, e.g. `{"speech to text": "Speech-to-Text", "gemma": "Gemma"}` |
 | `sound_cues` | `true` | Beep on record start/stop |
 | `max_record_seconds` | `300` | Hard cap per dictation |
 

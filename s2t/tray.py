@@ -1,17 +1,23 @@
 """System tray icon. The icon color reflects the app state; the menu controls the app.
 pystray's run() owns the main thread."""
 
+from __future__ import annotations
+
 import logging
 import os
+from typing import TYPE_CHECKING, Any, Callable, Iterator
 
 import pystray
 from PIL import Image, ImageDraw
 
-from .config import CONFIG_PATH, HISTORY_PATH
+from .config import CONFIG_PATH, HISTORY_PATH, MicDevice
+
+if TYPE_CHECKING:
+    from .app import App
 
 log = logging.getLogger(__name__)
 
-COLORS = {
+COLORS: dict[str, tuple[int, int, int]] = {
     "idle": (70, 167, 88),  # green: on and ready
     "recording": (229, 72, 77),
     "processing": (245, 165, 36),
@@ -19,7 +25,7 @@ COLORS = {
 }
 
 
-def _make_image(color) -> Image.Image:
+def _make_image(color: tuple[int, int, int]) -> Image.Image:
     img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     draw.ellipse((6, 6, 58, 58), fill=color + (255,))
@@ -31,7 +37,7 @@ def _make_image(color) -> Image.Image:
 
 
 class Tray:
-    def __init__(self, app):
+    def __init__(self, app: App):
         self._app = app
         self._images = {state: _make_image(color) for state, color in COLORS.items()}
         menu = pystray.Menu(
@@ -58,13 +64,13 @@ class Tray:
     # pystray rejects actions with more than 2 args, so the selected value is bound
     # as a closure free variable (a factory) rather than a default argument.
 
-    def _pick_mic(self, value):
+    def _pick_mic(self, value: MicDevice) -> Callable[[Any, Any], None]:
         return lambda icon, item: self._app.set_mic_device(value)
 
-    def _pick_model(self, key):
+    def _pick_model(self, key: str) -> Callable[[Any, Any], None]:
         return lambda icon, item: self._app.set_lmstudio_model(key)
 
-    def _mic_items(self):
+    def _mic_items(self) -> Iterator[pystray.MenuItem]:
         yield pystray.MenuItem(
             "System default",
             self._pick_mic(None),
@@ -79,7 +85,7 @@ class Tray:
                 radio=True,
             )
 
-    def _model_items(self):
+    def _model_items(self) -> Iterator[pystray.MenuItem]:
         models = self._app.available_models()
         if not models:
             yield pystray.MenuItem(self._app.current_model() or "(no models)", None, enabled=False)
@@ -92,19 +98,19 @@ class Tray:
                 radio=True,
             )
 
-    def _open_history(self):
+    def _open_history(self) -> None:
         HISTORY_PATH.touch(exist_ok=True)
         os.startfile(HISTORY_PATH)
 
-    def set_state(self, state: str):
+    def set_state(self, state: str) -> None:
         image = self._images.get(state)
         if image is not None:
             self._icon.icon = image
             self._icon.title = f"S2T — {state}"
 
-    def run(self):
+    def run(self) -> None:
         """Blocks until stop() is called."""
         self._icon.run()
 
-    def stop(self):
+    def stop(self) -> None:
         self._icon.stop()

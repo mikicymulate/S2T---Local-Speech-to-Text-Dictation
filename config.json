@@ -7,7 +7,7 @@
     "language": null
   },
   "hotkeys": {
-    "hold": "right ctrl",
+    "hold": "alt",
     "toggle": "f8"
   },
   "insert_mode": "paste",
@@ -16,6 +16,7 @@
     "enabled": true,
     "base_url": "http://127.0.0.1:1234/v1",
     "model": "google/gemma-4-e4b",
+    "gpu_offload": "off",
     "timeout_seconds": 15,
     "auto_start_server": true
   },

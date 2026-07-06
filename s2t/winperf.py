@@ -3,6 +3,8 @@ LM Studio's headless inference service ~20x (observed: identical requests taking
 124s). This module force-disables execution-speed throttling and raises the priority of
 all LM Studio processes. Same-user access only; failures are harmless (best effort)."""
 
+from __future__ import annotations
+
 import ctypes
 import logging
 import subprocess
@@ -38,7 +40,7 @@ def _unthrottle_pid(pid: int) -> bool:
         _kernel32.CloseHandle(handle)
 
 
-def unthrottle_lmstudio():
+def unthrottle_lmstudio() -> None:
     try:
         out = subprocess.run(
             'tasklist /FI "IMAGENAME eq LM Studio.exe" /FO CSV /NH',

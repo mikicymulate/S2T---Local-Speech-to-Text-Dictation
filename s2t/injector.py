@@ -6,16 +6,20 @@ Modes:
   clipboard_only - just copy; the user pastes manually
 """
 
+from __future__ import annotations
+
 import logging
 import time
 
 import keyboard
 import pyperclip
 
+from .config import InsertMode
+
 log = logging.getLogger(__name__)
 
 
-def insert_text(text: str, mode: str = "paste", restore_clipboard: bool = False):
+def insert_text(text: str, mode: InsertMode = "paste", restore_clipboard: bool = False) -> None:
     if not text:
         return
 

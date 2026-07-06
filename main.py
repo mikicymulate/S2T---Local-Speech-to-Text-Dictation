@@ -1,8 +1,10 @@
-"""S2T — local Wispr Flow-style dictation.
+"""S2T — local Speech-to-Text-style dictation.
 
 Run:  python main.py
 Hold right Ctrl (default) to dictate into any app; press F8 to toggle hands-free mode.
 """
+
+from __future__ import annotations
 
 import logging
 import sys
@@ -12,7 +14,7 @@ from s2t.config import LOG_PATH, load_config
 from s2t.tray import Tray
 
 
-def setup_logging():
+def setup_logging() -> None:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
@@ -24,7 +26,7 @@ def setup_logging():
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
-def main():
+def main() -> None:
     setup_logging()
     cfg = load_config()
     app = App(cfg)

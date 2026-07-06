@@ -1,9 +1,14 @@
 """Global hotkeys: hold-to-talk (press/release) and hands-free toggle."""
 
+from __future__ import annotations
+
 import logging
 import threading
+from typing import Any, Callable
 
 import keyboard
+
+from .config import HotkeyConfig
 
 log = logging.getLogger(__name__)
 
@@ -18,7 +23,7 @@ def capture_hotkey(combo: bool = False, timeout: float = 10.0) -> str | None:
     pressed: list[str] = []
     done = threading.Event()
 
-    def on_event(event):
+    def on_event(event: Any) -> None:
         if event.name is None:
             return
         if event.event_type == keyboard.KEY_DOWN:
@@ -42,17 +47,23 @@ def capture_hotkey(combo: bool = False, timeout: float = 10.0) -> str | None:
 
 
 class Hotkeys:
-    def __init__(self, hotkey_cfg: dict, on_hold_start, on_hold_stop, on_toggle):
-        self._hold_key = hotkey_cfg.get("hold")
-        self._toggle_key = hotkey_cfg.get("toggle")
+    def __init__(
+        self,
+        hotkey_cfg: HotkeyConfig,
+        on_hold_start: Callable[[], None],
+        on_hold_stop: Callable[[], None],
+        on_toggle: Callable[[], None],
+    ):
+        self._hold_key: str | None = hotkey_cfg.get("hold")
+        self._toggle_key: str | None = hotkey_cfg.get("toggle")
         self._on_hold_start = on_hold_start
         self._on_hold_stop = on_hold_stop
         self._on_toggle = on_toggle
         self._hold_down = False
-        self._hooks = []
-        self._toggle_handle = None
+        self._hooks: list[Any] = []
+        self._toggle_handle: Any = None
 
-    def start(self):
+    def start(self) -> None:
         if self._hold_key:
             self._hooks.append(keyboard.on_press_key(self._hold_key, self._pressed))
             self._hooks.append(keyboard.on_release_key(self._hold_key, self._released))
@@ -61,18 +72,18 @@ class Hotkeys:
             self._toggle_handle = keyboard.add_hotkey(self._toggle_key, self._on_toggle)
             log.info("Toggle recording: press %r", self._toggle_key)
 
-    def _pressed(self, event):
+    def _pressed(self, event: Any) -> None:
         # OS key-repeat fires press events continuously while held; only act on the first
         if not self._hold_down:
             self._hold_down = True
             self._on_hold_start()
 
-    def _released(self, event):
+    def _released(self, event: Any) -> None:
         if self._hold_down:
             self._hold_down = False
             self._on_hold_stop()
 
-    def stop(self):
+    def stop(self) -> None:
         for hook in self._hooks:
             try:
                 keyboard.unhook(hook)
