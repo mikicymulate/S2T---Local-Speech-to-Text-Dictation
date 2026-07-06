@@ -12,7 +12,7 @@ import json
 import logging
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Literal, TypedDict, cast
+from typing import Any, Literal, TypeAlias, TypedDict, cast
 
 log = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ HISTORY_PATH = APP_DIR / "history.jsonl"
 LOG_PATH = APP_DIR / "s2t.log"
 
 # A sounddevice input device: an index, a name substring, or None for the system default.
-MicDevice = int | str | None
+MicDevice: TypeAlias = int | str | None
 # How the transcript reaches the focused app (see injector.py).
 InsertMode = Literal["paste", "type", "clipboard_only"]
 

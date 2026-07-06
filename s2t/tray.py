@@ -98,7 +98,8 @@ class Tray:
                 radio=True,
             )
 
-    def _open_history(self) -> None:
+    @staticmethod
+    def _open_history() -> None:
         HISTORY_PATH.touch(exist_ok=True)
         os.startfile(HISTORY_PATH)
 

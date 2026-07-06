@@ -52,7 +52,7 @@ class MicLevelMonitor:
         self._stream: sd.InputStream | None = None
         self.level = 0.0
 
-    def _callback(self, indata: np.ndarray, frames: int, time_info: Any, status: Any) -> None:
+    def _callback(self, indata: np.ndarray, _frames: int, _time_info: Any, status: Any) -> None:
         if status:
             log.debug("Level monitor status: %s", status)
         rms = float(np.sqrt(np.mean(np.square(indata[:, 0]))))
@@ -117,7 +117,7 @@ class Recorder:
             )
             self._stream.start()
 
-    def _callback(self, indata: np.ndarray, frames: int, time_info: Any, status: Any) -> None:
+    def _callback(self, indata: np.ndarray, frames: int, _time_info: Any, status: Any) -> None:
         if status:
             log.debug("Audio stream status: %s", status)
         if self._samples < self._max_samples:
