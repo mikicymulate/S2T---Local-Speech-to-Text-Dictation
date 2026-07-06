@@ -21,7 +21,6 @@ DOT = {
     "processing": "#f5a524",
 }
 POLL_MS = 150
-SERVER_CHECK_MS = 3000
 
 
 class ToggleSwitch(tk.Canvas):
@@ -120,7 +119,7 @@ class SettingsWindow:
         self._model_box = ttk.Combobox(model, state="readonly", width=42)
         self._model_box.grid(row=0, column=0, sticky="ew", padx=8, pady=(8, 4))
         self._model_box.bind("<<ComboboxSelected>>", self._on_model_selected)
-        ttk.Button(model, text="Refresh", command=self._app.refresh_models).grid(
+        ttk.Button(model, text="Refresh", command=self._on_refresh).grid(
             row=0, column=1, padx=(4, 8), pady=(8, 4))
         self._model_status = ttk.Label(model, text="", foreground="#666")
         self._model_status.grid(row=1, column=0, columnspan=2, sticky="w", padx=8, pady=(0, 8))
@@ -151,7 +150,7 @@ class SettingsWindow:
         win.focus_force()
 
         self._poll()
-        self._schedule_server_check()
+        self._check_server()
 
     # --- microphone ---------------------------------------------------------
 
@@ -265,19 +264,24 @@ class SettingsWindow:
                 self._monitor_device = object()
             self._level.configure(value=0)
 
-    def _schedule_server_check(self):
-        if self._win is None or not self._win.winfo_exists():
-            return
-        # server_reachable() does a blocking GET; run it off the tk thread. The thread
-        # must NOT touch any tk widget (not thread-safe) — it only sets a plain attribute
-        # that the tk-thread poll loop reads.
+    def _check_server(self):
+        """One-shot server reachability check — runs only when the window opens and
+        when Refresh is clicked, so LM Studio isn't polled continuously.
+        server_reachable() does a blocking GET; run it off the tk thread. The thread
+        must NOT touch any tk widget (not thread-safe) — it only sets a plain attribute
+        that the tk-thread poll loop reads."""
         import threading
+
+        self._server_ok = None  # shows "checking…" until the thread reports back
 
         def check():
             self._server_ok = self._app.server_reachable()
 
         threading.Thread(target=check, name="server-check", daemon=True).start()
-        self._win.after(SERVER_CHECK_MS, self._schedule_server_check)
+
+    def _on_refresh(self):
+        self._app.refresh_models()
+        self._check_server()
 
     # --- actions ------------------------------------------------------------
 
