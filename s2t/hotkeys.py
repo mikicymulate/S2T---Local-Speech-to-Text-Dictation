@@ -72,13 +72,13 @@ class Hotkeys:
             self._toggle_handle = keyboard.add_hotkey(self._toggle_key, self._on_toggle)
             log.info("Toggle recording: press %r", self._toggle_key)
 
-    def _pressed(self, event: Any) -> None:
+    def _pressed(self, _event: Any) -> None:
         # OS key-repeat fires press events continuously while held; only act on the first
         if not self._hold_down:
             self._hold_down = True
             self._on_hold_start()
 
-    def _released(self, event: Any) -> None:
+    def _released(self, _event: Any) -> None:
         if self._hold_down:
             self._hold_down = False
             self._on_hold_stop()
