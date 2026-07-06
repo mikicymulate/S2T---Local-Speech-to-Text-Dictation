@@ -3,46 +3,62 @@
     IDLE -> RECORDING -> PROCESSING (transcribe -> clean -> insert) -> IDLE
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import threading
 import time
 import winsound
 from datetime import datetime
+from typing import TYPE_CHECKING, Final, Literal
+
+import numpy as np
 
 from . import injector, winperf
 from .audio import Recorder, SAMPLE_RATE, list_input_devices
-from .config import HISTORY_PATH, load_config, save_config
+from .config import Config, HISTORY_PATH, MicDevice, load_config, save_config
 from .formatter import Formatter, list_models
 from .hotkeys import Hotkeys, capture_hotkey
 from .overlay import Overlay
 from .settings_window import SettingsWindow
 from .transcriber import Transcriber
 
+if TYPE_CHECKING:
+    from .tray import Tray
+
 log = logging.getLogger(__name__)
 
-IDLE, RECORDING, PROCESSING = "idle", "recording", "processing"
+# The three states of the dictation machine. UI/tray states ("done", "error",
+# "hidden", "disabled") are distinct transient labels, not values of _state.
+State = Literal["idle", "recording", "processing"]
+HotkeyKind = Literal["hold", "toggle"]
+
+IDLE: Final[State] = "idle"
+RECORDING: Final[State] = "recording"
+PROCESSING: Final[State] = "processing"
 MIN_AUDIO_SECONDS = 0.3
 
 
 class App:
-    def __init__(self, cfg: dict):
+    def __init__(self, cfg: Config):
         self.enabled = True
-        self.tray = None  # set by main() after construction
+        self.tray: Tray | None = None  # set by main() after construction
         self.model_loading = False  # read by the settings window
-        self.hotkey_capturing = None  # None, "hold", or "toggle"; read by the settings window
+        # None, "hold", or "toggle"; read by the settings window
+        self.hotkey_capturing: HotkeyKind | None = None
         self.hotkey_status = ""  # transient message ("Cancelled", "Timed out", ...)
-        self._models_cache: list = []
-        self._state = IDLE
+        self._models_cache: list[tuple[str, str]] = []
+        self._state: State = IDLE
         self._state_lock = threading.Lock()
         self._build(cfg)
         self._overlay = Overlay()
 
     @property
-    def state(self) -> str:
+    def state(self) -> State:
         return self._state
 
-    def _build(self, cfg: dict):
+    def _build(self, cfg: Config) -> None:
         self._cfg = cfg
         self._recorder = Recorder(cfg["mic_device"], cfg["max_record_seconds"])
         self._transcriber = Transcriber(cfg["whisper"])
@@ -57,13 +73,13 @@ class App:
             on_toggle=self._toggle,
         )
 
-    def start(self):
+    def start(self) -> None:
         self._overlay.start()
         self._hotkeys.start()
         # warm up the heavy pieces in the background so the first dictation is snappy
         threading.Thread(target=self._warm_up, name="warmup", daemon=True).start()
 
-    def _warm_up(self):
+    def _warm_up(self) -> None:
         try:
             self._transcriber.load()
         except Exception:
@@ -74,7 +90,7 @@ class App:
 
     # --- hotkey callbacks (must return fast) -------------------------------
 
-    def _begin_recording(self):
+    def _begin_recording(self) -> None:
         with self._state_lock:
             if not self.enabled or self._state != IDLE:
                 return
@@ -90,7 +106,7 @@ class App:
         self._beep(880)
         self._set_ui(RECORDING)
 
-    def _finish_recording(self):
+    def _finish_recording(self) -> None:
         with self._state_lock:
             if self._state != RECORDING:
                 return
@@ -100,7 +116,7 @@ class App:
         self._set_ui(PROCESSING)
         threading.Thread(target=self._process, args=(audio,), name="process", daemon=True).start()
 
-    def _toggle(self):
+    def _toggle(self) -> None:
         if self._state == RECORDING:
             self._finish_recording()
         else:
@@ -108,7 +124,7 @@ class App:
 
     # --- pipeline -----------------------------------------------------------
 
-    def _process(self, audio):
+    def _process(self, audio: np.ndarray) -> None:
         try:
             if audio.size < MIN_AUDIO_SECONDS * SAMPLE_RATE:
                 self._set_ui("hidden")
@@ -137,7 +153,7 @@ class App:
             if self.tray:
                 self.tray.set_state(IDLE if self.enabled else "disabled")
 
-    def _append_history(self, seconds: float, raw: str, cleaned: str):
+    def _append_history(self, seconds: float, raw: str, cleaned: str) -> None:
         try:
             entry = {
                 "time": datetime.now().isoformat(timespec="seconds"),
@@ -152,7 +168,7 @@ class App:
 
     # --- UI helpers ----------------------------------------------------------
 
-    def _set_ui(self, state: str):
+    def _set_ui(self, state: str) -> None:
         self._overlay.set_state(state if state in ("recording", "processing", "done", "error", "hidden") else "hidden")
         if self.tray:
             if state in (RECORDING, PROCESSING):
@@ -160,7 +176,7 @@ class App:
             else:
                 self.tray.set_state(IDLE if self.enabled else "disabled")
 
-    def _beep(self, freq: int):
+    def _beep(self, freq: int) -> None:
         if self._cfg["sound_cues"]:
             threading.Thread(
                 target=winsound.Beep, args=(freq, 120), daemon=True,
@@ -168,7 +184,7 @@ class App:
 
     # --- tray actions ----------------------------------------------------------
 
-    def set_enabled(self, enabled: bool):
+    def set_enabled(self, enabled: bool) -> None:
         self.enabled = enabled
         if not enabled and self._state == RECORDING:
             self._recorder.stop()
@@ -179,19 +195,19 @@ class App:
             self.tray.set_state("idle" if enabled else "disabled")
         log.info("Dictation %s", "enabled" if enabled else "disabled")
 
-    def open_settings(self):
+    def open_settings(self) -> None:
         """Show the status/settings window (marshalled onto the tkinter thread)."""
         self._overlay.run_on_ui(lambda root: SettingsWindow.show(root, self))
 
     # --- microphone -----------------------------------------------------------
 
-    def available_mics(self):
+    def available_mics(self) -> list[tuple[int, str]]:
         return list_input_devices()
 
-    def current_mic(self):
+    def current_mic(self) -> MicDevice:
         return self._cfg["mic_device"]
 
-    def set_mic_device(self, device):
+    def set_mic_device(self, device: MicDevice) -> None:
         if device == self._cfg["mic_device"]:
             return
         self._cfg["mic_device"] = device
@@ -210,24 +226,24 @@ class App:
 
     # --- LM Studio model ------------------------------------------------------
 
-    def available_models(self):
+    def available_models(self) -> list[tuple[str, str]]:
         return list(self._models_cache)
 
-    def current_model(self):
+    def current_model(self) -> str:
         return self._cfg["lmstudio"]["model"]
 
     def server_reachable(self) -> bool:
         return self._formatter.server_reachable()
 
-    def refresh_models(self):
-        def work():
+    def refresh_models(self) -> None:
+        def work() -> None:
             try:
                 self._models_cache = list_models(self._cfg["lmstudio"])
             except Exception:
                 log.exception("Could not refresh model list")
         threading.Thread(target=work, name="refresh-models", daemon=True).start()
 
-    def set_lmstudio_model(self, model):
+    def set_lmstudio_model(self, model: str) -> None:
         if not model or model == self._cfg["lmstudio"]["model"]:
             return
         # the formatter holds a reference to cfg["lmstudio"], so this also updates it
@@ -235,7 +251,7 @@ class App:
         save_config(self._cfg)
         log.info("Switching LM Studio model to %r", model)
 
-        def work():
+        def work() -> None:
             self.model_loading = True
             try:
                 self._formatter.ensure_server()  # loads the model + warms it up
@@ -247,10 +263,11 @@ class App:
 
     # --- hotkeys ----------------------------------------------------------------
 
-    def current_hotkeys(self) -> dict:
-        return dict(self._cfg["hotkeys"])
+    def current_hotkeys(self) -> dict[str, str]:
+        hk = self._cfg["hotkeys"]
+        return {"hold": hk["hold"], "toggle": hk["toggle"]}
 
-    def start_hotkey_capture(self, kind: str):
+    def start_hotkey_capture(self, kind: HotkeyKind) -> None:
         """kind: 'hold' or 'toggle'. Waits (in the background) for the user to press the
         new key — a combo like ctrl+alt+space is allowed for toggle — then rebinds and
         persists it. The settings window polls hotkey_capturing / hotkey_status."""
@@ -262,8 +279,8 @@ class App:
             target=self._capture_hotkey, args=(kind,), name="hotkey-capture", daemon=True,
         ).start()
 
-    def _capture_hotkey(self, kind: str):
-        old = self._cfg["hotkeys"].get(kind)
+    def _capture_hotkey(self, kind: HotkeyKind) -> None:
+        old = self._cfg["hotkeys"][kind]
         try:
             # unhook current bindings so pressing them during capture doesn't dictate
             self._hotkeys.stop()
@@ -273,7 +290,7 @@ class App:
             elif key == "esc":
                 self.hotkey_status = "Cancelled"
             else:
-                other = "toggle" if kind == "hold" else "hold"
+                other: HotkeyKind = "toggle" if kind == "hold" else "hold"
                 if key == self._cfg["hotkeys"].get(other):
                     self.hotkey_status = f"'{key}' is already the {other} key"
                 else:
@@ -297,14 +314,14 @@ class App:
                 self._hotkeys.start()
             self.hotkey_capturing = None
 
-    def reload_config(self):
+    def reload_config(self) -> None:
         log.info("Reloading config...")
         self._hotkeys.stop()
         self._build(load_config())
         self._hotkeys.start()
         threading.Thread(target=self._warm_up, name="warmup", daemon=True).start()
 
-    def quit(self):
+    def quit(self) -> None:
         log.info("Quitting")
         self._hotkeys.stop()
         if self._recorder.recording:

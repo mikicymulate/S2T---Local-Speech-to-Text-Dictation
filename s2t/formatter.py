@@ -4,13 +4,21 @@ Any failure — server down, timeout, bad response — falls back to the raw tra
 so dictation keeps working even without LM Studio.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import subprocess
 import threading
 import time
+from typing import TYPE_CHECKING
 
 import requests
+
+from .config import LMStudioConfig
+
+if TYPE_CHECKING:
+    from openai import OpenAI
 
 log = logging.getLogger(__name__)
 
@@ -24,7 +32,7 @@ INSTRUCTIONS = ("/no_think Clean up this dictated text: fix punctuation and capi
                 "Reply with only the cleaned text.\n\nDictated text: {raw}")
 
 
-def list_models(lmstudio_cfg: dict) -> list[tuple[str, str]]:
+def list_models(lmstudio_cfg: LMStudioConfig) -> list[tuple[str, str]]:
     """LLM models available in LM Studio as (model_key, display_name), for the picker.
 
     Prefers `lms ls --json` (which tags each model's type, so embedding models can be
@@ -62,24 +70,26 @@ def list_models(lmstudio_cfg: dict) -> list[tuple[str, str]]:
 
 
 class Formatter:
-    def __init__(self, lmstudio_cfg: dict, dictionary: dict):
+    def __init__(self, lmstudio_cfg: LMStudioConfig, dictionary: dict[str, str]):
         self._cfg = lmstudio_cfg
         self._dictionary = dictionary
-        self._client = None
+        self._client: OpenAI | None = None
         self._lock = threading.Lock()
 
-    def _get_client(self):
+    def _get_client(self) -> OpenAI:
         with self._lock:
-            if self._client is None:
+            client = self._client
+            if client is None:
                 from openai import OpenAI
 
-                self._client = OpenAI(
+                client = OpenAI(
                     base_url=self._cfg["base_url"],
                     api_key="lm-studio",
                     timeout=self._cfg["timeout_seconds"],
                     max_retries=0,
                 )
-            return self._client
+                self._client = client
+            return client
 
     def _prompt(self, raw: str) -> str:
         dictionary = ""
@@ -151,7 +161,7 @@ class Formatter:
             log.debug("Could not query loaded models (%s)", exc)
             return False  # fall through to `lms load`, which is a no-op-ish if loaded
 
-    def ensure_server(self):
+    def ensure_server(self) -> None:
         """Start the LM Studio server and load the model if needed, then warm it up."""
         if not self._cfg["enabled"]:
             return

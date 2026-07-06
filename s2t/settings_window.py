@@ -6,13 +6,27 @@ method here runs on that thread. Heavy work (loading a model, writing config) is
 to App methods that do it off-thread; this window only reads state the App exposes.
 """
 
+from __future__ import annotations
+
 import logging
+import threading
 import tkinter as tk
 from tkinter import ttk
+from typing import TYPE_CHECKING, Callable, TypedDict
 
 from .audio import MicLevelMonitor, list_input_devices
+from .config import MicDevice
+
+if TYPE_CHECKING:
+    from .app import App
 
 log = logging.getLogger(__name__)
+
+
+class _Pad(TypedDict):
+    """Grid padding splatted into .grid(**pad); a TypedDict so mypy can check the splat."""
+    padx: int
+    pady: int
 
 DOT = {
     "off": "#8a8a8e",
@@ -29,7 +43,7 @@ class ToggleSwitch(tk.Canvas):
 
     W, H, PAD = 52, 26, 3
 
-    def __init__(self, parent, command):
+    def __init__(self, parent: tk.Misc, command: Callable[[], None]):
         bg = parent.winfo_toplevel().cget("bg")
         super().__init__(parent, width=self.W, height=self.H,
                          highlightthickness=0, bg=bg, cursor="hand2")
@@ -38,7 +52,7 @@ class ToggleSwitch(tk.Canvas):
         self.bind("<Button-1>", lambda _e: self._command())
         self.set(False)
 
-    def set(self, on: bool):
+    def set(self, on: bool) -> None:
         if on == self._on:
             return
         self._on = on
@@ -54,10 +68,10 @@ class ToggleSwitch(tk.Canvas):
 
 
 class SettingsWindow:
-    _instance: "SettingsWindow | None" = None
+    _instance: SettingsWindow | None = None
 
     @classmethod
-    def show(cls, root, app):
+    def show(cls, root: tk.Tk, app: App) -> None:
         """Open the window, or focus it if it's already open. Runs on the tk thread."""
         inst = cls._instance
         if inst is not None and inst._win is not None and inst._win.winfo_exists():
@@ -67,21 +81,21 @@ class SettingsWindow:
             return
         cls._instance = cls(root, app)
 
-    def __init__(self, root, app):
+    def __init__(self, root: tk.Tk, app: App):
         self._app = app
         self._monitor: MicLevelMonitor | None = None
-        self._monitor_device = object()  # sentinel: forces first build
-        self._models_snapshot: list = []
-        self._server_ok = None  # None = unknown yet
-        self._after_id = None
+        self._monitor_device: MicDevice | object = object()  # sentinel: forces first build
+        self._models_snapshot: list[tuple[str, str]] = []
+        self._server_ok: bool | None = None  # None = unknown yet
+        self._after_id: str | None = None
 
         win = tk.Toplevel(root)
-        self._win = win
+        self._win: tk.Toplevel | None = win
         win.title("S2T")
         win.columnconfigure(0, weight=1)
         win.rowconfigure(5, weight=1)  # spacer: extra vertical space goes below content
         win.protocol("WM_DELETE_WINDOW", self._on_close)
-        pad = {"padx": 12, "pady": 6}
+        pad: _Pad = {"padx": 12, "pady": 6}
 
         # --- status row -----------------------------------------------------
         status = ttk.Frame(win)
@@ -102,7 +116,7 @@ class SettingsWindow:
         mic.grid(row=2, column=0, sticky="ew", **pad)
         mic.columnconfigure(0, weight=1)
         self._mic_labels: list[str] = []
-        self._mic_values: list = []
+        self._mic_values: list[MicDevice] = []
         self._mic_box = ttk.Combobox(mic, state="readonly", width=42)
         self._mic_box.grid(row=0, column=0, sticky="ew", padx=8, pady=(8, 4))
         self._mic_box.bind("<<ComboboxSelected>>", self._on_mic_selected)
@@ -115,7 +129,7 @@ class SettingsWindow:
         model.grid(row=3, column=0, sticky="ew", **pad)
         model.columnconfigure(0, weight=1)
         self._model_labels: list[str] = []
-        self._model_values: list = []
+        self._model_values: list[str] = []
         self._model_box = ttk.Combobox(model, state="readonly", width=42)
         self._model_box.grid(row=0, column=0, sticky="ew", padx=8, pady=(8, 4))
         self._model_box.bind("<<ComboboxSelected>>", self._on_model_selected)
@@ -154,7 +168,7 @@ class SettingsWindow:
 
     # --- microphone ---------------------------------------------------------
 
-    def _populate_mics(self):
+    def _populate_mics(self) -> None:
         self._mic_labels = ["System default"]
         self._mic_values = [None]
         for idx, name in list_input_devices():
@@ -175,14 +189,14 @@ class SettingsWindow:
                 return i
         return 0
 
-    def _on_mic_selected(self, _event=None):
+    def _on_mic_selected(self, _event: object = None) -> None:
         i = self._mic_box.current()
         if 0 <= i < len(self._mic_values):
             self._app.set_mic_device(self._mic_values[i])
 
     # --- model --------------------------------------------------------------
 
-    def _sync_models(self, force=False):
+    def _sync_models(self, force: bool = False) -> None:
         models = self._app.available_models()
         if not force and models == self._models_snapshot:
             return
@@ -196,14 +210,14 @@ class SettingsWindow:
         elif self._model_labels:
             self._model_box.set(current or "")
 
-    def _on_model_selected(self, _event=None):
+    def _on_model_selected(self, _event: object = None) -> None:
         i = self._model_box.current()
         if 0 <= i < len(self._model_values):
             self._app.set_lmstudio_model(self._model_values[i])
 
     # --- periodic refresh ---------------------------------------------------
 
-    def _poll(self):
+    def _poll(self) -> None:
         if self._win is None or not self._win.winfo_exists():
             return
         app = self._app
@@ -244,7 +258,7 @@ class SettingsWindow:
 
         self._after_id = self._win.after(POLL_MS, self._poll)
 
-    def _update_meter(self):
+    def _update_meter(self) -> None:
         """Run the level monitor only while idle so it never fights the Recorder."""
         want = self._app.state == "idle"
         device = self._app.current_mic()
@@ -264,40 +278,39 @@ class SettingsWindow:
                 self._monitor_device = object()
             self._level.configure(value=0)
 
-    def _check_server(self):
+    def _check_server(self) -> None:
         """One-shot server reachability check — runs only when the window opens and
         when Refresh is clicked, so LM Studio isn't polled continuously.
         server_reachable() does a blocking GET; run it off the tk thread. The thread
         must NOT touch any tk widget (not thread-safe) — it only sets a plain attribute
         that the tk-thread poll loop reads."""
-        import threading
-
         self._server_ok = None  # shows "checking…" until the thread reports back
 
-        def check():
+        def check() -> None:
             self._server_ok = self._app.server_reachable()
 
         threading.Thread(target=check, name="server-check", daemon=True).start()
 
-    def _on_refresh(self):
+    def _on_refresh(self) -> None:
         self._app.refresh_models()
         self._check_server()
 
     # --- actions ------------------------------------------------------------
 
-    def _on_toggle(self):
+    def _on_toggle(self) -> None:
         self._app.set_enabled(not self._app.enabled)
 
-    def _on_close(self):
-        if self._after_id is not None:
+    def _on_close(self) -> None:
+        win = self._win
+        if self._after_id is not None and win is not None:
             try:
-                self._win.after_cancel(self._after_id)
+                win.after_cancel(self._after_id)
             except Exception:
                 pass
         if self._monitor is not None:
             self._monitor.stop()
             self._monitor = None
-        win, self._win = self._win, None
+        self._win = None
         if win is not None:
             win.destroy()
         SettingsWindow._instance = None

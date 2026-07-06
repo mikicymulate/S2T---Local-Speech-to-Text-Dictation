@@ -1,17 +1,22 @@
 """Microphone capture: 16 kHz mono float32, buffered in memory between start() and stop()."""
 
+from __future__ import annotations
+
 import logging
 import threading
+from typing import Any
 
 import numpy as np
 import sounddevice as sd
+
+from .config import MicDevice
 
 log = logging.getLogger(__name__)
 
 SAMPLE_RATE = 16000  # what Whisper expects
 
 
-def resolve_device(mic_device):
+def resolve_device(mic_device: MicDevice) -> int | None:
     """Accept a device index, a name substring, or None for the system default."""
     if mic_device is None or mic_device == "":
         return None
@@ -42,12 +47,12 @@ class MicLevelMonitor:
     so a UI can show whether the selected mic is picking up sound. Independent of
     the Recorder — pause it while a real dictation is recording."""
 
-    def __init__(self, device=None):
+    def __init__(self, device: MicDevice = None):
         self._device = resolve_device(device)
         self._stream: sd.InputStream | None = None
         self.level = 0.0
 
-    def _callback(self, indata, frames, time_info, status):
+    def _callback(self, indata: np.ndarray, frames: int, time_info: Any, status: Any) -> None:
         if status:
             log.debug("Level monitor status: %s", status)
         rms = float(np.sqrt(np.mean(np.square(indata[:, 0]))))
@@ -55,7 +60,7 @@ class MicLevelMonitor:
         # (RMS ~0.02–0.1 in float32) lands in a clearly visible range
         self.level = min(1.0, max(self.level * 0.6, rms * 8.0))
 
-    def start(self):
+    def start(self) -> None:
         if self._stream is not None:
             return
         try:
@@ -71,7 +76,7 @@ class MicLevelMonitor:
             log.exception("Could not start mic level monitor")
             self._stream = None
 
-    def stop(self):
+    def stop(self) -> None:
         self.level = 0.0
         if self._stream is None:
             return
@@ -85,7 +90,7 @@ class MicLevelMonitor:
 
 
 class Recorder:
-    def __init__(self, mic_device=None, max_seconds=300):
+    def __init__(self, mic_device: MicDevice = None, max_seconds: float = 300):
         self._device = resolve_device(mic_device)
         self._max_samples = int(max_seconds * SAMPLE_RATE)
         self._chunks: list[np.ndarray] = []
@@ -97,7 +102,7 @@ class Recorder:
     def recording(self) -> bool:
         return self._stream is not None
 
-    def start(self):
+    def start(self) -> None:
         with self._lock:
             if self._stream is not None:
                 return
@@ -112,7 +117,7 @@ class Recorder:
             )
             self._stream.start()
 
-    def _callback(self, indata, frames, time_info, status):
+    def _callback(self, indata: np.ndarray, frames: int, time_info: Any, status: Any) -> None:
         if status:
             log.debug("Audio stream status: %s", status)
         if self._samples < self._max_samples:
