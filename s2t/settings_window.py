@@ -94,6 +94,25 @@ class SettingsWindow:
         self._model_status.grid(row=1, column=0, columnspan=2, sticky="w", padx=8, pady=(0, 8))
         self._sync_models(force=True)
 
+        # --- hotkeys ----------------------------------------------------------
+        hk = ttk.LabelFrame(win, text="Hotkeys")
+        hk.grid(row=4, column=0, sticky="ew", **pad)
+        hk.columnconfigure(1, weight=1)
+        ttk.Label(hk, text="Hold to talk:").grid(row=0, column=0, sticky="w", padx=(8, 4), pady=(8, 2))
+        self._hold_val = ttk.Label(hk, text="", font=("Segoe UI", 10, "bold"))
+        self._hold_val.grid(row=0, column=1, sticky="w", pady=(8, 2))
+        self._hold_btn = ttk.Button(hk, text="Change…", width=9,
+                                    command=lambda: self._app.start_hotkey_capture("hold"))
+        self._hold_btn.grid(row=0, column=2, padx=8, pady=(8, 2))
+        ttk.Label(hk, text="Hands-free toggle:").grid(row=1, column=0, sticky="w", padx=(8, 4), pady=2)
+        self._toggle_val = ttk.Label(hk, text="", font=("Segoe UI", 10, "bold"))
+        self._toggle_val.grid(row=1, column=1, sticky="w", pady=2)
+        self._toggle_btn = ttk.Button(hk, text="Change…", width=9,
+                                      command=lambda: self._app.start_hotkey_capture("toggle"))
+        self._toggle_btn.grid(row=1, column=2, padx=8, pady=2)
+        self._hk_status = ttk.Label(hk, text="", foreground="#666")
+        self._hk_status.grid(row=2, column=0, columnspan=3, sticky="w", padx=8, pady=(2, 8))
+
         win.update_idletasks()
         win.lift()
         win.focus_force()
@@ -169,6 +188,17 @@ class SettingsWindow:
 
         self._update_meter()
         self._sync_models()
+
+        hotkeys = app.current_hotkeys()
+        capturing = app.hotkey_capturing
+        self._hold_val.configure(
+            text="Press a key… (Esc cancels)" if capturing == "hold" else hotkeys.get("hold") or "—")
+        self._toggle_val.configure(
+            text="Press keys… (Esc cancels)" if capturing == "toggle" else hotkeys.get("toggle") or "—")
+        btn_state = "disabled" if capturing or app.state != "idle" else "normal"
+        self._hold_btn.configure(state=btn_state)
+        self._toggle_btn.configure(state=btn_state)
+        self._hk_status.configure(text=app.hotkey_status)
 
         if app.model_loading:
             self._model_status.configure(text="Loading model…", foreground="#b06a00")

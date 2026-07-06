@@ -41,6 +41,9 @@ dictation is **ON** (green) or **OFF** (gray), with a one-click toggle. From the
 
 - **Pick the microphone** from a dropdown, with a live level meter to confirm it's hearing you.
 - **Choose the LM Studio model** from a dropdown; selecting one loads it into LM Studio right away.
+- **Change the hotkeys**: click *Change…* next to *Hold to talk* or *Hands-free toggle*, then press
+  the new key. The toggle accepts combos (e.g. Ctrl+Alt+Space); the hold key is a single key.
+  Esc cancels.
 
 The tray menu also has **Microphone** and **Model** submenus for quick switching without opening
 the window. All choices are written back to `config.json`.

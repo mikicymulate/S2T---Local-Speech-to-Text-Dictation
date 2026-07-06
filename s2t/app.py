@@ -14,7 +14,7 @@ from . import injector, winperf
 from .audio import Recorder, SAMPLE_RATE, list_input_devices
 from .config import HISTORY_PATH, load_config, save_config
 from .formatter import Formatter, list_models
-from .hotkeys import Hotkeys
+from .hotkeys import Hotkeys, capture_hotkey
 from .overlay import Overlay
 from .settings_window import SettingsWindow
 from .transcriber import Transcriber
@@ -30,6 +30,8 @@ class App:
         self.enabled = True
         self.tray = None  # set by main() after construction
         self.model_loading = False  # read by the settings window
+        self.hotkey_capturing = None  # None, "hold", or "toggle"; read by the settings window
+        self.hotkey_status = ""  # transient message ("Cancelled", "Timed out", ...)
         self._models_cache: list = []
         self._state = IDLE
         self._state_lock = threading.Lock()
@@ -45,8 +47,11 @@ class App:
         self._recorder = Recorder(cfg["mic_device"], cfg["max_record_seconds"])
         self._transcriber = Transcriber(cfg["whisper"])
         self._formatter = Formatter(cfg["lmstudio"], cfg["dictionary"])
-        self._hotkeys = Hotkeys(
-            cfg["hotkeys"],
+        self._hotkeys = self._make_hotkeys()
+
+    def _make_hotkeys(self) -> Hotkeys:
+        return Hotkeys(
+            self._cfg["hotkeys"],
             on_hold_start=self._begin_recording,
             on_hold_stop=self._finish_recording,
             on_toggle=self._toggle,
@@ -239,6 +244,58 @@ class App:
             finally:
                 self.model_loading = False
         threading.Thread(target=work, name="load-model", daemon=True).start()
+
+    # --- hotkeys ----------------------------------------------------------------
+
+    def current_hotkeys(self) -> dict:
+        return dict(self._cfg["hotkeys"])
+
+    def start_hotkey_capture(self, kind: str):
+        """kind: 'hold' or 'toggle'. Waits (in the background) for the user to press the
+        new key — a combo like ctrl+alt+space is allowed for toggle — then rebinds and
+        persists it. The settings window polls hotkey_capturing / hotkey_status."""
+        if self.hotkey_capturing or self._state != IDLE:
+            return
+        self.hotkey_capturing = kind
+        self.hotkey_status = ""
+        threading.Thread(
+            target=self._capture_hotkey, args=(kind,), name="hotkey-capture", daemon=True,
+        ).start()
+
+    def _capture_hotkey(self, kind: str):
+        old = self._cfg["hotkeys"].get(kind)
+        try:
+            # unhook current bindings so pressing them during capture doesn't dictate
+            self._hotkeys.stop()
+            key = capture_hotkey(combo=(kind == "toggle"), timeout=10.0)
+            if key is None:
+                self.hotkey_status = "Timed out — try again"
+            elif key == "esc":
+                self.hotkey_status = "Cancelled"
+            else:
+                other = "toggle" if kind == "hold" else "hold"
+                if key == self._cfg["hotkeys"].get(other):
+                    self.hotkey_status = f"'{key}' is already the {other} key"
+                else:
+                    self._cfg["hotkeys"][kind] = key
+                    save_config(self._cfg)
+                    log.info("Hotkey %r set to %r", kind, key)
+        except Exception:
+            log.exception("Hotkey capture failed")
+            self.hotkey_status = "Capture failed (see log)"
+        finally:
+            try:
+                self._hotkeys = self._make_hotkeys()
+                self._hotkeys.start()
+            except Exception:
+                # e.g. the keyboard library rejects the captured key name: revert
+                log.exception("Could not bind %r; reverting to %r", kind, old)
+                self.hotkey_status = "Key not bindable — reverted"
+                self._cfg["hotkeys"][kind] = old
+                save_config(self._cfg)
+                self._hotkeys = self._make_hotkeys()
+                self._hotkeys.start()
+            self.hotkey_capturing = None
 
     def reload_config(self):
         log.info("Reloading config...")

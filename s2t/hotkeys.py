@@ -1,10 +1,44 @@
 """Global hotkeys: hold-to-talk (press/release) and hands-free toggle."""
 
 import logging
+import threading
 
 import keyboard
 
 log = logging.getLogger(__name__)
+
+
+def capture_hotkey(combo: bool = False, timeout: float = 10.0) -> str | None:
+    """Block until the user presses a key and return its keyboard-library name.
+
+    combo=True collects every key held down and returns e.g. "ctrl+alt+space" when
+    the first key is released (a single key still works). Returns None on timeout;
+    returns "esc" if the user pressed Escape (callers treat that as cancel).
+    """
+    pressed: list[str] = []
+    done = threading.Event()
+
+    def on_event(event):
+        if event.name is None:
+            return
+        if event.event_type == keyboard.KEY_DOWN:
+            if event.name == "esc":
+                pressed[:] = ["esc"]
+                done.set()
+            elif not combo:
+                pressed.append(event.name)
+                done.set()
+            elif event.name not in pressed:
+                pressed.append(event.name)
+        elif combo and pressed:  # first key released: the combo is complete
+            done.set()
+
+    hook = keyboard.hook(on_event)
+    try:
+        done.wait(timeout)
+    finally:
+        keyboard.unhook(hook)
+    return "+".join(pressed) if pressed else None
 
 
 class Hotkeys:
