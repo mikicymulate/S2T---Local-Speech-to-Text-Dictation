@@ -24,6 +24,43 @@ INSTRUCTIONS = ("/no_think Clean up this dictated text: fix punctuation and capi
                 "Reply with only the cleaned text.\n\nDictated text: {raw}")
 
 
+def list_models(lmstudio_cfg: dict) -> list[tuple[str, str]]:
+    """LLM models available in LM Studio as (model_key, display_name), for the picker.
+
+    Prefers `lms ls --json` (which tags each model's type, so embedding models can be
+    filtered out); falls back to the OpenAI-compatible /models endpoint. The currently
+    configured model is always included so the picker can show the active choice.
+    """
+    current = lmstudio_cfg.get("model")
+    models: list[tuple[str, str]] = []
+    try:
+        result = subprocess.run(
+            ["lms", "ls", "--json"],
+            capture_output=True, text=True, timeout=30, shell=True, check=False,
+        )
+        for m in json.loads(result.stdout or "[]"):
+            if m.get("type") == "llm":
+                key = m.get("modelKey") or m.get("path")
+                if key:
+                    models.append((key, m.get("displayName") or key))
+    except Exception as exc:
+        log.debug("`lms ls` failed (%s); falling back to /models endpoint", exc)
+
+    if not models:
+        try:
+            resp = requests.get(lmstudio_cfg["base_url"].rstrip("/") + "/models", timeout=5)
+            for m in resp.json().get("data", []):
+                mid = m.get("id", "")
+                if mid and "embed" not in mid.lower():
+                    models.append((mid, mid))
+        except Exception as exc:
+            log.debug("Could not list models via /models (%s)", exc)
+
+    if current and current not in {key for key, _ in models}:
+        models.insert(0, (current, current))
+    return models
+
+
 class Formatter:
     def __init__(self, lmstudio_cfg: dict, dictionary: dict):
         self._cfg = lmstudio_cfg

@@ -32,6 +32,11 @@ class Overlay:
         """state: one of STATES keys, or 'hidden'."""
         self._queue.put(state)
 
+    def run_on_ui(self, fn):
+        """Schedule fn(root) to run on the tkinter thread. Use this to build/show
+        other windows (e.g. the settings window) safely from any thread."""
+        self._queue.put(("call", fn))
+
     def stop(self):
         self._queue.put("__quit__")
 
@@ -77,11 +82,17 @@ class Overlay:
             def poll():
                 try:
                     while True:
-                        state = self._queue.get_nowait()
-                        if state == "__quit__":
+                        item = self._queue.get_nowait()
+                        if item == "__quit__":
                             root.destroy()
                             return
-                        apply(state)
+                        if isinstance(item, tuple) and item[0] == "call":
+                            try:
+                                item[1](root)
+                            except Exception:
+                                log.exception("UI callback failed")
+                            continue
+                        apply(item)
                 except queue.Empty:
                     pass
                 root.after(50, poll)

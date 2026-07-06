@@ -25,6 +25,65 @@ def resolve_device(mic_device):
     return None
 
 
+def list_input_devices() -> list[tuple[int, str]]:
+    """Every capture-capable device as (index, name), for the mic picker."""
+    devices = []
+    try:
+        for idx, dev in enumerate(sd.query_devices()):
+            if dev["max_input_channels"] > 0:
+                devices.append((idx, dev["name"]))
+    except Exception:
+        log.exception("Could not enumerate input devices")
+    return devices
+
+
+class MicLevelMonitor:
+    """Opens a lightweight input stream and exposes the current RMS level (0..1),
+    so a UI can show whether the selected mic is picking up sound. Independent of
+    the Recorder — pause it while a real dictation is recording."""
+
+    def __init__(self, device=None):
+        self._device = resolve_device(device)
+        self._stream: sd.InputStream | None = None
+        self.level = 0.0
+
+    def _callback(self, indata, frames, time_info, status):
+        if status:
+            log.debug("Level monitor status: %s", status)
+        rms = float(np.sqrt(np.mean(np.square(indata[:, 0]))))
+        # decay the previous value so the bar falls smoothly; gain so normal speech
+        # (RMS ~0.02–0.1 in float32) lands in a clearly visible range
+        self.level = min(1.0, max(self.level * 0.6, rms * 8.0))
+
+    def start(self):
+        if self._stream is not None:
+            return
+        try:
+            self._stream = sd.InputStream(
+                samplerate=SAMPLE_RATE,
+                channels=1,
+                dtype="float32",
+                device=self._device,
+                callback=self._callback,
+            )
+            self._stream.start()
+        except Exception:
+            log.exception("Could not start mic level monitor")
+            self._stream = None
+
+    def stop(self):
+        self.level = 0.0
+        if self._stream is None:
+            return
+        try:
+            self._stream.stop()
+            self._stream.close()
+        except Exception:
+            log.debug("Error stopping level monitor", exc_info=True)
+        finally:
+            self._stream = None
+
+
 class Recorder:
     def __init__(self, mic_device=None, max_seconds=300):
         self._device = resolve_device(mic_device)

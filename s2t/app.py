@@ -11,11 +11,12 @@ import winsound
 from datetime import datetime
 
 from . import injector, winperf
-from .audio import Recorder, SAMPLE_RATE
-from .config import HISTORY_PATH, load_config
-from .formatter import Formatter
+from .audio import Recorder, SAMPLE_RATE, list_input_devices
+from .config import HISTORY_PATH, load_config, save_config
+from .formatter import Formatter, list_models
 from .hotkeys import Hotkeys
 from .overlay import Overlay
+from .settings_window import SettingsWindow
 from .transcriber import Transcriber
 
 log = logging.getLogger(__name__)
@@ -28,10 +29,16 @@ class App:
     def __init__(self, cfg: dict):
         self.enabled = True
         self.tray = None  # set by main() after construction
+        self.model_loading = False  # read by the settings window
+        self._models_cache: list = []
         self._state = IDLE
         self._state_lock = threading.Lock()
         self._build(cfg)
         self._overlay = Overlay()
+
+    @property
+    def state(self) -> str:
+        return self._state
 
     def _build(self, cfg: dict):
         self._cfg = cfg
@@ -58,6 +65,7 @@ class App:
             log.exception("Failed to load Whisper model")
         self._formatter.ensure_server()
         winperf.unthrottle_lmstudio()
+        self.refresh_models()
 
     # --- hotkey callbacks (must return fast) -------------------------------
 
@@ -165,6 +173,72 @@ class App:
         if self.tray:
             self.tray.set_state("idle" if enabled else "disabled")
         log.info("Dictation %s", "enabled" if enabled else "disabled")
+
+    def open_settings(self):
+        """Show the status/settings window (marshalled onto the tkinter thread)."""
+        self._overlay.run_on_ui(lambda root: SettingsWindow.show(root, self))
+
+    # --- microphone -----------------------------------------------------------
+
+    def available_mics(self):
+        return list_input_devices()
+
+    def current_mic(self):
+        return self._cfg["mic_device"]
+
+    def set_mic_device(self, device):
+        if device == self._cfg["mic_device"]:
+            return
+        self._cfg["mic_device"] = device
+        save_config(self._cfg)
+        if self._recorder.recording:
+            try:
+                self._recorder.stop()
+            except Exception:
+                log.debug("Error stopping recorder on mic change", exc_info=True)
+            with self._state_lock:
+                self._state = IDLE
+            self._set_ui("hidden")
+        # only the recorder depends on the mic; leave Whisper/LM Studio untouched
+        self._recorder = Recorder(device, self._cfg["max_record_seconds"])
+        log.info("Microphone set to %r", device)
+
+    # --- LM Studio model ------------------------------------------------------
+
+    def available_models(self):
+        return list(self._models_cache)
+
+    def current_model(self):
+        return self._cfg["lmstudio"]["model"]
+
+    def server_reachable(self) -> bool:
+        return self._formatter.server_reachable()
+
+    def refresh_models(self):
+        def work():
+            try:
+                self._models_cache = list_models(self._cfg["lmstudio"])
+            except Exception:
+                log.exception("Could not refresh model list")
+        threading.Thread(target=work, name="refresh-models", daemon=True).start()
+
+    def set_lmstudio_model(self, model):
+        if not model or model == self._cfg["lmstudio"]["model"]:
+            return
+        # the formatter holds a reference to cfg["lmstudio"], so this also updates it
+        self._cfg["lmstudio"]["model"] = model
+        save_config(self._cfg)
+        log.info("Switching LM Studio model to %r", model)
+
+        def work():
+            self.model_loading = True
+            try:
+                self._formatter.ensure_server()  # loads the model + warms it up
+            except Exception:
+                log.exception("Could not load model %r", model)
+            finally:
+                self.model_loading = False
+        threading.Thread(target=work, name="load-model", daemon=True).start()
 
     def reload_config(self):
         log.info("Reloading config...")

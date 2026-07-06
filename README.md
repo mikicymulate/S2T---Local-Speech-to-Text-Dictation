@@ -34,9 +34,21 @@ While recording, a small pill appears at the bottom of the screen. After release
 
 Every dictation is logged to `history.jsonl` (timestamp, raw transcript, cleaned text).
 
+## Settings window
+
+Right-click the tray icon → **Settings…** opens a small window that shows at a glance whether
+dictation is **ON** (green) or **OFF** (gray), with a one-click toggle. From there you can:
+
+- **Pick the microphone** from a dropdown, with a live level meter to confirm it's hearing you.
+- **Choose the LM Studio model** from a dropdown; selecting one loads it into LM Studio right away.
+
+The tray menu also has **Microphone** and **Model** submenus for quick switching without opening
+the window. All choices are written back to `config.json`.
+
 ## Configuration — `config.json`
 
 Created with defaults on first run. Edit it (tray → *Open config*), then tray → *Reload config*.
+Microphone and model can also be set from the **Settings window** above.
 
 | Key | Default | Notes |
 |---|---|---|

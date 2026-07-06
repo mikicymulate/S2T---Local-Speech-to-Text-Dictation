@@ -75,3 +75,13 @@ def load_config() -> dict:
         log.error("Could not read %s (%s); using defaults", CONFIG_PATH, exc)
         return copy.deepcopy(DEFAULTS)
     return _merge(DEFAULTS, user)
+
+
+def save_config(cfg: dict) -> bool:
+    """Persist the config dict back to config.json. Returns True on success."""
+    try:
+        CONFIG_PATH.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+        return True
+    except OSError:
+        log.exception("Could not write %s", CONFIG_PATH)
+        return False
