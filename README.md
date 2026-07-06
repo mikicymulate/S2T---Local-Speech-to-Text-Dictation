@@ -68,6 +68,17 @@ Microphone and model can also be set from the **Settings window** above.
 | `sound_cues` | `true` | Beep on record start/stop |
 | `max_record_seconds` | `300` | Hard cap per dictation |
 
+## Tests
+
+```
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
+The suite is offline and hardware-free — the microphone, LM Studio, the global keyboard
+hook and the real `config.json`/`history.jsonl` are all mocked or redirected to temp files,
+so it's safe to run anywhere. `python -m mypy` type-checks `main.py` and the `s2t` package.
+
 ## Troubleshooting
 
 - **Nothing happens on the hotkey** — another app may grab the key; change `hotkeys.hold` in config. Some elevated (admin) windows ignore keystrokes from non-elevated apps: run `python main.py` from an admin terminal to dictate into admin windows.

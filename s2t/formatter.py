@@ -31,6 +31,11 @@ INSTRUCTIONS = ("/no_think Clean up this dictated text: fix punctuation and capi
                 "anything or change the meaning{dictionary}. "
                 "Reply with only the cleaned text.\n\nDictated text: {raw}")
 
+# Opening quote -> its matching closing quote. A model that wraps its whole answer in
+# quotes uses a matched pair; curly quotes (“…”) have distinct open/close characters,
+# so a plain text[0] == text[-1] check would miss them.
+_WRAPPING_QUOTES = {'"': '"', "'": "'", "“": "”"}
+
 
 def list_models(lmstudio_cfg: LMStudioConfig) -> list[tuple[str, str]]:
     """LLM models available in LM Studio as (model_key, display_name), for the picker.
@@ -126,8 +131,8 @@ class Formatter:
                 if chunk.choices and chunk.choices[0].delta.content:
                     parts.append(chunk.choices[0].delta.content)
             text = "".join(parts).strip()
-            # models occasionally wrap the result in quotes despite instructions
-            if len(text) > 1 and text[0] == text[-1] and text[0] in "\"'“":
+            # models occasionally wrap the result in a matched quote pair despite instructions
+            if len(text) > 1 and _WRAPPING_QUOTES.get(text[0]) == text[-1]:
                 text = text[1:-1].strip()
             if not text:
                 log.warning("LM Studio returned empty text; using raw transcript")
