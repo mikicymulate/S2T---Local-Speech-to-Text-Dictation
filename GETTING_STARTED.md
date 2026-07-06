@@ -9,7 +9,7 @@ the **Daily use** section at the top is all you need.
 
 1. Make sure **LM Studio** is installed and open (it can be minimized).
 2. Double-click **`run.bat`** in `C:\dev\AI\S2T`.
-3. Wait ~15 seconds for the tray icon to turn from orange to gray.
+3. Wait ~15 seconds for the tray icon to turn green.
 4. Click into any text box, **hold Right Ctrl**, speak, **release**. Your words appear.
 5. To quit: right-click the tray icon (bottom-right of the taskbar) → **Quit**.
 
@@ -87,12 +87,12 @@ tells you the state:
 
 | Color | Meaning |
 |---|---|
-| **Gray** | Idle, ready to dictate |
+| **Green** | On — ready to dictate |
 | **Red** | Recording your voice right now |
 | **Orange** | Transcribing / cleaning up |
-| **Dark gray** | Dictation disabled |
+| **Gray** | Dictation turned off |
 
-> Wait for the icon to settle on **gray** before your first dictation — that means both AI
+> Wait for the icon to settle on **green** before your first dictation — that means both AI
 > models finished loading. Dictating before then still works but the first one will be slow.
 
 ### Dictating — two ways
@@ -175,7 +175,7 @@ python main.py
 Also check the log file `C:\dev\AI\S2T\s2t.log`.
 
 **Nothing happens when I hold Right Ctrl.**
-- Make sure the tray icon is gray (ready) and **Enabled** is checked in the tray menu.
+- Make sure the tray icon is green (ready) and **Enabled** is checked in the tray menu.
 - Another program may be using Right Ctrl — change `hotkeys.hold` in config to something like
   `"right alt"`, then Reload config.
 - If you're dictating into a program you ran **as Administrator**, keystrokes from S2T get
@@ -189,7 +189,7 @@ That means the LM Studio step timed out and it fell back to raw text. Check:
 - LM Studio is open and its server is on: run `lms server status` (should say running).
 - The model is available: `lms ls` should list `google/gemma-4-e4b`.
 - The app auto-starts the server and loads the model, but the *first* cleanup after launch
-  can take a few extra seconds while the model loads. Wait for the tray to go gray.
+  can take a few extra seconds while the model loads. Wait for the tray to go green.
 
 **It's using the wrong microphone.**
 List your microphones:

@@ -12,10 +12,10 @@ from .config import CONFIG_PATH, HISTORY_PATH
 log = logging.getLogger(__name__)
 
 COLORS = {
-    "idle": (120, 120, 128),
+    "idle": (70, 167, 88),  # green: on and ready
     "recording": (229, 72, 77),
     "processing": (245, 165, 36),
-    "disabled": (60, 60, 64),
+    "disabled": (128, 128, 134),  # gray: dictation turned off
 }
 
 

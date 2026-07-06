@@ -18,7 +18,7 @@ python main.py
 
 - First run downloads the Whisper model (~460 MB for `small`) from Hugging Face; fully offline afterwards.
 - If LM Studio's server isn't running, the app starts it via `lms server start` and warms the model up (the model loads on the first request, so give it a moment after launch).
-- A gray tray icon appears when running. It turns **red** while recording and **orange** while transcribing.
+- A **green** tray icon appears when running (gray when dictation is turned off). It turns **red** while recording and **orange** while transcribing.
 
 ## Usage
 

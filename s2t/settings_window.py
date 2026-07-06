@@ -24,6 +24,36 @@ POLL_MS = 150
 SERVER_CHECK_MS = 3000
 
 
+class ToggleSwitch(tk.Canvas):
+    """iOS-style on/off switch: a pill-shaped track with a sliding white knob,
+    green when on and gray when off. Redraws only when the state changes."""
+
+    W, H, PAD = 52, 26, 3
+
+    def __init__(self, parent, command):
+        bg = parent.winfo_toplevel().cget("bg")
+        super().__init__(parent, width=self.W, height=self.H,
+                         highlightthickness=0, bg=bg, cursor="hand2")
+        self._command = command
+        self._on: bool | None = None  # unknown: forces the first draw
+        self.bind("<Button-1>", lambda _e: self._command())
+        self.set(False)
+
+    def set(self, on: bool):
+        if on == self._on:
+            return
+        self._on = on
+        self.delete("all")
+        w, h, p = self.W, self.H, self.PAD
+        r = h // 2
+        track = DOT["idle"] if on else "#b0b0b6"
+        self.create_oval(0, 0, h, h, fill=track, outline="")
+        self.create_oval(w - h, 0, w, h, fill=track, outline="")
+        self.create_rectangle(r, 0, w - r, h, fill=track, outline="")
+        x = (w - h + p) if on else p
+        self.create_oval(x, p, x + h - 2 * p, h - p, fill="white", outline="")
+
+
 class SettingsWindow:
     _instance: "SettingsWindow | None" = None
 
@@ -49,20 +79,22 @@ class SettingsWindow:
         win = tk.Toplevel(root)
         self._win = win
         win.title("S2T")
-        win.resizable(False, False)
+        win.columnconfigure(0, weight=1)
+        win.rowconfigure(5, weight=1)  # spacer: extra vertical space goes below content
         win.protocol("WM_DELETE_WINDOW", self._on_close)
         pad = {"padx": 12, "pady": 6}
 
         # --- status row -----------------------------------------------------
         status = ttk.Frame(win)
         status.grid(row=0, column=0, sticky="ew", **pad)
-        self._dot = tk.Canvas(status, width=16, height=16, highlightthickness=0)
+        status.columnconfigure(1, weight=1)
+        self._dot = tk.Canvas(status, width=16, height=16, highlightthickness=0, bg=win.cget("bg"))
         self._dot_id = self._dot.create_oval(2, 2, 14, 14, fill=DOT["off"], outline="")
         self._dot.grid(row=0, column=0, padx=(0, 8))
-        self._status_lbl = ttk.Label(status, text="", font=("Segoe UI", 11, "bold"))
+        self._status_lbl = ttk.Label(status, text="", font=("Segoe UI", 12, "bold"))
         self._status_lbl.grid(row=0, column=1, sticky="w")
-        self._toggle_btn = ttk.Button(status, text="", width=10, command=self._on_toggle)
-        self._toggle_btn.grid(row=0, column=2, padx=(16, 0))
+        self._switch = ToggleSwitch(status, command=self._on_toggle)
+        self._switch.grid(row=0, column=2, sticky="e", padx=(16, 0))
 
         ttk.Separator(win).grid(row=1, column=0, sticky="ew", padx=12)
 
@@ -101,19 +133,20 @@ class SettingsWindow:
         ttk.Label(hk, text="Hold to talk:").grid(row=0, column=0, sticky="w", padx=(8, 4), pady=(8, 2))
         self._hold_val = ttk.Label(hk, text="", font=("Segoe UI", 10, "bold"))
         self._hold_val.grid(row=0, column=1, sticky="w", pady=(8, 2))
-        self._hold_btn = ttk.Button(hk, text="Change…", width=9,
-                                    command=lambda: self._app.start_hotkey_capture("hold"))
-        self._hold_btn.grid(row=0, column=2, padx=8, pady=(8, 2))
+        self._hk_hold_btn = ttk.Button(hk, text="Change…", width=9,
+                                       command=lambda: self._app.start_hotkey_capture("hold"))
+        self._hk_hold_btn.grid(row=0, column=2, padx=8, pady=(8, 2))
         ttk.Label(hk, text="Hands-free toggle:").grid(row=1, column=0, sticky="w", padx=(8, 4), pady=2)
         self._toggle_val = ttk.Label(hk, text="", font=("Segoe UI", 10, "bold"))
         self._toggle_val.grid(row=1, column=1, sticky="w", pady=2)
-        self._toggle_btn = ttk.Button(hk, text="Change…", width=9,
-                                      command=lambda: self._app.start_hotkey_capture("toggle"))
-        self._toggle_btn.grid(row=1, column=2, padx=8, pady=2)
+        self._hk_toggle_btn = ttk.Button(hk, text="Change…", width=9,
+                                         command=lambda: self._app.start_hotkey_capture("toggle"))
+        self._hk_toggle_btn.grid(row=1, column=2, padx=8, pady=2)
         self._hk_status = ttk.Label(hk, text="", foreground="#666")
         self._hk_status.grid(row=2, column=0, columnspan=3, sticky="w", padx=8, pady=(2, 8))
 
         win.update_idletasks()
+        win.minsize(win.winfo_reqwidth(), win.winfo_reqheight())
         win.lift()
         win.focus_force()
 
@@ -177,14 +210,15 @@ class SettingsWindow:
         app = self._app
         state = app.state if app.enabled else "off"
 
-        self._dot.itemconfigure(self._dot_id, fill=DOT.get(state, DOT["off"]))
-        self._status_lbl.configure(text={
+        color = DOT.get(state, DOT["off"])
+        self._dot.itemconfigure(self._dot_id, fill=color)
+        self._status_lbl.configure(foreground=color, text={
             "off": "OFF",
             "idle": "ON — Idle",
             "recording": "Recording…",
             "processing": "Transcribing…",
         }.get(state, "OFF"))
-        self._toggle_btn.configure(text="Turn Off" if app.enabled else "Turn On")
+        self._switch.set(app.enabled)
 
         self._update_meter()
         self._sync_models()
@@ -196,8 +230,8 @@ class SettingsWindow:
         self._toggle_val.configure(
             text="Press keys… (Esc cancels)" if capturing == "toggle" else hotkeys.get("toggle") or "—")
         btn_state = "disabled" if capturing or app.state != "idle" else "normal"
-        self._hold_btn.configure(state=btn_state)
-        self._toggle_btn.configure(state=btn_state)
+        self._hk_hold_btn.configure(state=btn_state)
+        self._hk_toggle_btn.configure(state=btn_state)
         self._hk_status.configure(text=app.hotkey_status)
 
         if app.model_loading:
